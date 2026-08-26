@@ -1,9 +1,20 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export default function DropZone({ accept = '.pdf', multiple = false, onFiles, label, hint, id = 'file-input' }) {
   const [dragOver, setDragOver] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const inputRef = useRef();
+
+  useEffect(() => {
+    if (selectedFiles.length === 1 && (selectedFiles[0].type.startsWith('image/') || /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(selectedFiles[0].name))) {
+      const url = URL.createObjectURL(selectedFiles[0]);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [selectedFiles]);
 
   const handleFiles = useCallback((files) => {
     if (!files || !files.length) return;
@@ -79,25 +90,54 @@ export default function DropZone({ accept = '.pdf', multiple = false, onFiles, l
         </div>
       ) : (
         <div className="dz-selected-state">
-          <div className="dz-file-card">
-            <div className="dz-file-icon">
-              📄
+          <div className="dz-file-card" onClick={(e) => e.stopPropagation()}>
+            <div className="dz-file-preview-wrap">
+              {previewUrl ? (
+                <img src={previewUrl} alt="File preview" className="dz-file-thumb" />
+              ) : (
+                <div className="dz-file-icon">
+                  {selectedFiles.length > 1 ? '📚' : selectedFiles[0]?.name.endsWith('.pdf') ? '📄' : '🖼️'}
+                </div>
+              )}
             </div>
+
             <div className="dz-file-meta">
-              <div className="dz-file-name">
+              <div className="dz-file-name" title={selectedFiles.length === 1 ? selectedFiles[0].name : ''}>
                 {selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} files selected`}
               </div>
               <div className="dz-file-info">
-                {selectedFiles.length === 1 ? formatSize(selectedFiles[0].size) : `${selectedFiles.length} documents ready`}
-                <span className="dz-ready-badge">Ready for processing</span>
+                <span className="dz-file-size">
+                  {selectedFiles.length === 1 ? formatSize(selectedFiles[0].size) : `${selectedFiles.length} items`}
+                </span>
+                <span className="dz-ready-badge">
+                  <span className="dz-ready-dot"></span>
+                  Ready for processing
+                </span>
               </div>
             </div>
-            <button className="dz-remove-btn" onClick={handleClear} title="Remove selected file">
-              ✕
-            </button>
+
+            <div className="dz-actions">
+              <button
+                type="button"
+                className="dz-change-btn"
+                onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+                title="Change selected file"
+              >
+                Replace
+              </button>
+              <button
+                type="button"
+                className="dz-remove-btn"
+                onClick={handleClear}
+                title="Remove file"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
+

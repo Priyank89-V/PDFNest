@@ -289,7 +289,19 @@ export async function processJoinImages(files, direction = 'horizontal', spacing
   return { blob, width: totalW, height: totalH };
 }
 
-export async function processMeme(file, topText = '', bottomText = '', fontSize = 48) {
+export async function processMeme(file, topText = '', bottomText = '', options = {}) {
+  const opts = typeof options === 'number' ? { fontSize: options } : (options || {});
+  const {
+    fontSize = 'auto',
+    fontFamily = 'Impact',
+    textColor = '#ffffff',
+    strokeColor = '#000000',
+    strokeWidth = 4,
+    uppercase = true,
+    topPosPercent = 4,
+    bottomPosPercent = 4
+  } = opts;
+
   const img = await fileToImage(file);
   const canvas = document.createElement('canvas');
   canvas.width = img.naturalWidth;
@@ -297,26 +309,84 @@ export async function processMeme(file, topText = '', bottomText = '', fontSize 
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0);
 
-  ctx.font = `bold ${fontSize}px Impact, Arial, sans-serif`;
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = Math.max(3, fontSize / 12);
-  ctx.textAlign = 'center';
-
-  if (topText.trim()) {
-    ctx.textBaseline = 'top';
-    ctx.strokeText(topText.toUpperCase(), canvas.width / 2, 20);
-    ctx.fillText(topText.toUpperCase(), canvas.width / 2, 20);
+  // Auto calculate or scale font size based on canvas width
+  let actualFontSize;
+  if (!fontSize || fontSize === 'auto') {
+    actualFontSize = Math.max(22, Math.round(canvas.width * 0.08));
+  } else {
+    // scale font size proportionally to canvas width if canvas is large/small
+    const userVal = parseInt(fontSize, 10) || 48;
+    actualFontSize = Math.max(12, Math.round(userVal * (canvas.width / 700)));
   }
 
-  if (bottomText.trim()) {
+  const fontName = fontFamily || 'Impact';
+  ctx.font = `900 ${actualFontSize}px ${fontName}, Arial, sans-serif`;
+  ctx.fillStyle = textColor || '#ffffff';
+  ctx.strokeStyle = strokeColor || '#000000';
+
+  const calcStroke = strokeWidth !== undefined && strokeWidth !== null
+    ? Math.max(0, Math.round(strokeWidth * (actualFontSize / 40)))
+    : Math.max(2, Math.round(actualFontSize / 10));
+
+  ctx.lineWidth = calcStroke;
+  ctx.textAlign = 'center';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+
+  // Helper function to wrap text nicely so it NEVER overflows canvas
+  const wrapText = (textStr) => {
+    const textToDraw = uppercase ? textStr.toUpperCase() : textStr;
+    const words = textToDraw.split(' ');
+    const lines = [];
+    let currentLine = words[0] || '';
+
+    const maxW = canvas.width * 0.94; // 94% of image width max
+
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const width = ctx.measureText(currentLine + " " + word).width;
+      if (width < maxW) {
+        currentLine += " " + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+
+  const lineSpacing = actualFontSize * 1.12;
+
+  // Draw Top Text
+  if (topText && topText.trim()) {
+    const lines = wrapText(topText.trim());
+    ctx.textBaseline = 'top';
+    const startY = (canvas.height * (topPosPercent / 100)) + 8;
+
+    lines.forEach((line, index) => {
+      const y = startY + (index * lineSpacing);
+      if (calcStroke > 0) ctx.strokeText(line, canvas.width / 2, y);
+      ctx.fillText(line, canvas.width / 2, y);
+    });
+  }
+
+  // Draw Bottom Text
+  if (bottomText && bottomText.trim()) {
+    const lines = wrapText(bottomText.trim());
     ctx.textBaseline = 'bottom';
-    ctx.strokeText(bottomText.toUpperCase(), canvas.width / 2, canvas.height - 20);
-    ctx.fillText(bottomText.toUpperCase(), canvas.width / 2, canvas.height - 20);
+    const startY = canvas.height - (canvas.height * (bottomPosPercent / 100)) - 8;
+
+    // Draw from bottom line upwards
+    lines.slice().reverse().forEach((line, index) => {
+      const y = startY - (index * lineSpacing);
+      if (calcStroke > 0) ctx.strokeText(line, canvas.width / 2, y);
+      ctx.fillText(line, canvas.width / 2, y);
+    });
   }
 
   const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-  return { blob, width: canvas.width, height: canvas.height };
+  return { blob, canvas, width: canvas.width, height: canvas.height };
 }
 
 export async function processImagesToPdf(files) {

@@ -62,6 +62,16 @@ export default function ImageToolPage() {
   // Meme states
   const [memeTop, setMemeTop] = useState('WHEN YOU WRITE CLEAN CODE');
   const [memeBottom, setMemeBottom] = useState('AND IT WORKS FIRST TRY');
+  const [memeFontSize, setMemeFontSize] = useState(48);
+  const [memeAutoFont, setMemeAutoFont] = useState(true);
+  const [memeFontFamily, setMemeFontFamily] = useState('Impact');
+  const [memeTextColor, setMemeTextColor] = useState('#ffffff');
+  const [memeStrokeColor, setMemeStrokeColor] = useState('#000000');
+  const [memeStrokeWidth, setMemeStrokeWidth] = useState(4);
+  const [memeUppercase, setMemeUppercase] = useState(true);
+  const [memeTopPos, setMemeTopPos] = useState(4);
+  const [memeBottomPos, setMemeBottomPos] = useState(4);
+  const [liveMemePreview, setLiveMemePreview] = useState(null);
 
   // Grid & Join states
   const [gridRows, setGridRows] = useState(3);
@@ -118,6 +128,43 @@ export default function ImageToolPage() {
       downloadBlob(result.blob, result.fileName);
     }
   }, [result]);
+
+  // Live Meme Real-time Preview effect
+  useEffect(() => {
+    if (toolId !== 'meme' || !file) {
+      setLiveMemePreview(null);
+      return;
+    }
+    let isCancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await processMeme(file, memeTop, memeBottom, {
+          fontSize: memeAutoFont ? 'auto' : memeFontSize,
+          fontFamily: memeFontFamily,
+          textColor: memeTextColor,
+          strokeColor: memeStrokeColor,
+          strokeWidth: memeStrokeWidth,
+          uppercase: memeUppercase,
+          topPosPercent: memeTopPos,
+          bottomPosPercent: memeBottomPos
+        });
+        if (!isCancelled && res?.blob) {
+          const url = URL.createObjectURL(res.blob);
+          setLiveMemePreview((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return url;
+          });
+        }
+      } catch (err) {
+        // silent fail for transient draft edits
+      }
+    }, 150);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [toolId, file, memeTop, memeBottom, memeFontSize, memeAutoFont, memeFontFamily, memeTextColor, memeStrokeColor, memeStrokeWidth, memeUppercase, memeTopPos, memeBottomPos]);
 
   const handleFile = useCallback((fileList) => {
     if (!fileList || fileList.length === 0) {
@@ -347,13 +394,22 @@ export default function ImageToolPage() {
     if (!file) { toast('Please select an image', 'err'); return; }
     setProcessing(true); prog(30, 'Creating meme…');
     try {
-      const res = await processMeme(file, memeTop, memeBottom, 52);
+      const res = await processMeme(file, memeTop, memeBottom, {
+        fontSize: memeAutoFont ? 'auto' : memeFontSize,
+        fontFamily: memeFontFamily,
+        textColor: memeTextColor,
+        strokeColor: memeStrokeColor,
+        strokeWidth: memeStrokeWidth,
+        uppercase: memeUppercase,
+        topPosPercent: memeTopPos,
+        bottomPosPercent: memeBottomPos
+      });
       prog(100, 'Done!');
       const previewUrl = URL.createObjectURL(res.blob);
       setResult({
         success: true,
         title: 'Meme Generated!',
-        info: 'High quality meme ready with Impact font & stroke outline.',
+        info: 'High quality meme ready with custom styling & smart text wrapping.',
         blob: res.blob,
         fileName: 'meme.png',
         previewUrl
@@ -605,16 +661,143 @@ export default function ImageToolPage() {
         )}
 
         {toolId === 'meme' && (
-          <div className="options-panel">
-            <div className="opt-group full">
-              <label className="opt-label">Top Text</label>
-              <input className="opt-input" value={memeTop} onChange={e => setMemeTop(e.target.value)} />
+          <>
+            <div className="options-panel">
+              <div className="opt-group full">
+                <label className="opt-label">Top Text</label>
+                <input
+                  className="opt-input"
+                  placeholder="Enter top text..."
+                  value={memeTop}
+                  onChange={e => setMemeTop(e.target.value)}
+                />
+              </div>
+
+              <div className="opt-group full">
+                <label className="opt-label">Bottom Text</label>
+                <input
+                  className="opt-input"
+                  placeholder="Enter bottom text..."
+                  value={memeBottom}
+                  onChange={e => setMemeBottom(e.target.value)}
+                />
+              </div>
+
+              <div className="opt-group">
+                <label className="opt-label">Font Family</label>
+                <select className="opt-select" value={memeFontFamily} onChange={e => setMemeFontFamily(e.target.value)}>
+                  <option value="Impact">Impact (Classic Meme)</option>
+                  <option value="Arial">Arial Black (Bold Clean)</option>
+                  <option value="Outfit">Outfit (Modern)</option>
+                  <option value="Comic Sans MS">Comic Sans MS (Fun)</option>
+                  <option value="Courier New">Courier New (Monospace Code)</option>
+                  <option value="Trebuchet MS">Trebuchet MS (Sans)</option>
+                </select>
+              </div>
+
+              <div className="opt-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="opt-label">Font Size</label>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--brand-600)', cursor: 'pointer', fontWeight: 700 }}>
+                    <input
+                      type="checkbox"
+                      checked={memeAutoFont}
+                      onChange={e => setMemeAutoFont(e.target.checked)}
+                      style={{ marginRight: 4 }}
+                    />
+                    Auto-Fit
+                  </label>
+                </div>
+                {!memeAutoFont ? (
+                  <div className="range-row">
+                    <input
+                      type="range"
+                      min="16"
+                      max="120"
+                      value={memeFontSize}
+                      onChange={e => setMemeFontSize(parseInt(e.target.value))}
+                    />
+                    <span>{memeFontSize}px</span>
+                  </div>
+                ) : (
+                  <input className="opt-input" disabled value="Auto Scaled Proportional" style={{ opacity: 0.7 }} />
+                )}
+              </div>
+
+              <div className="opt-group">
+                <label className="opt-label">Text Color</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="color"
+                    className="opt-input"
+                    style={{ padding: 2, height: 38, width: 50, cursor: 'pointer' }}
+                    value={memeTextColor}
+                    onChange={e => setMemeTextColor(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="opt-input"
+                    value={memeTextColor}
+                    onChange={e => setMemeTextColor(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="opt-group">
+                <label className="opt-label">Outline Color</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="color"
+                    className="opt-input"
+                    style={{ padding: 2, height: 38, width: 50, cursor: 'pointer' }}
+                    value={memeStrokeColor}
+                    onChange={e => setMemeStrokeColor(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="opt-input"
+                    value={memeStrokeColor}
+                    onChange={e => setMemeStrokeColor(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="opt-group">
+                <label className="opt-label">Outline Thickness ({memeStrokeWidth}px)</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="12"
+                  value={memeStrokeWidth}
+                  onChange={e => setMemeStrokeWidth(parseInt(e.target.value))}
+                />
+              </div>
+
+              <div className="opt-group">
+                <label className="opt-label">Text Options</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.88rem', height: 38 }}>
+                  <input
+                    type="checkbox"
+                    checked={memeUppercase}
+                    onChange={e => setMemeUppercase(e.target.checked)}
+                  />
+                  Convert text to UPPERCASE
+                </label>
+              </div>
             </div>
-            <div className="opt-group full">
-              <label className="opt-label">Bottom Text</label>
-              <input className="opt-input" value={memeBottom} onChange={e => setMemeBottom(e.target.value)} />
-            </div>
-          </div>
+
+            {liveMemePreview && (
+              <div className="live-preview-box">
+                <div className="live-preview-header">
+                  <span>⚡ Live Real-Time Preview</span>
+                  <span className="live-badge">Auto-Updating</span>
+                </div>
+                <div className="live-preview-img-container">
+                  <img src={liveMemePreview} alt="Live Meme Preview" className="live-preview-img" />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* ACTION BUTTON */}
